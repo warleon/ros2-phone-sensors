@@ -88,26 +88,37 @@ def data_to_imu_msg(data, ros_time, frame_id, orientation_covariance, angular_ve
     orientation_alpha = data["motion"]["oa"]
     orientation_beta = data["motion"]["ob"]
     orientation_gamma = data["motion"]["og"]
-    qx, qy, qz, qw = get_quaternion_from_euler(
-        math.radians(orientation_beta),
-        math.radians(orientation_gamma),
-        math.radians(orientation_alpha),
-    )
-    msg.orientation.x = float(qx)
-    msg.orientation.y = float(qy)
-    msg.orientation.z = float(qz)
-    msg.orientation.w = float(qw)
-    msg.orientation_covariance = orientation_covariance
+    if None in (orientation_alpha, orientation_beta, orientation_gamma):
+        # Browser couldn't supply absolute orientation (no magnetometer,
+        # permission denied, etc). Per REP 103 / the Imu message docs, a
+        # leading covariance of -1 tells consumers this field is unset
+        # instead of silently dropping the whole message.
+        msg.orientation.w = 1.0
+        msg.orientation_covariance = [-1.0] + [0.0] * 8
+    else:
+        qx, qy, qz, qw = get_quaternion_from_euler(
+            math.radians(orientation_beta),
+            math.radians(orientation_gamma),
+            math.radians(orientation_alpha),
+        )
+        msg.orientation.x = float(qx)
+        msg.orientation.y = float(qy)
+        msg.orientation.z = float(qz)
+        msg.orientation.w = float(qw)
+        msg.orientation_covariance = orientation_covariance
 
     # Rotation rate is in deg/sec, in the device coordinates frame
     # alpha around z, beta around x, gamma around y
     rotation_alpha = data["motion"]["ra"]
     rotation_beta = data["motion"]["rb"]
     rotation_gamma = data["motion"]["rg"]
-    msg.angular_velocity.x = float(math.radians(rotation_beta))
-    msg.angular_velocity.y = float(math.radians(rotation_gamma))
-    msg.angular_velocity.z = float(math.radians(rotation_alpha))
-    msg.angular_velocity_covariance = angular_velocity_covariance
+    if None in (rotation_alpha, rotation_beta, rotation_gamma):
+        msg.angular_velocity_covariance = [-1.0] + [0.0] * 8
+    else:
+        msg.angular_velocity.x = float(math.radians(rotation_beta))
+        msg.angular_velocity.y = float(math.radians(rotation_gamma))
+        msg.angular_velocity.z = float(math.radians(rotation_alpha))
+        msg.angular_velocity_covariance = angular_velocity_covariance
 
     # Acceleration is in m/s2, in the device coordinates frame
     msg.linear_acceleration.x = float(data["motion"]["ax"])
